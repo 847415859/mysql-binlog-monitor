@@ -1,10 +1,10 @@
 package com.qiankun.mysql.dest.mongo;
 
 import com.mongodb.*;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClientFactory;
+import com.mongodb.client.MongoClients;
 import com.qiankun.mysql.Config;
-import org.bson.Document;
 
 
 /**
@@ -20,8 +20,13 @@ public class MongoAdmin {
         if(mongoClient == null){
             synchronized (MongoClient.class){
                 if(mongoClient == null){
+                    String addr="mongodb://"+config.mongoAddr+":"+config.mongoPort;
                     MongoCredential credential = MongoCredential.createCredential(config.mongoUsername, config.mongoDb, config.mongoPassword.toCharArray());
-                    mongoClient = new MongoClient(new ServerAddress(config.mongoAddr,config.mongoPort),credential,MongoClientOptions.builder().build());
+                    MongoClientSettings mongoClientSettings = MongoClientSettings.builder()
+                            .credential(credential)
+                            .applyConnectionString(new ConnectionString(addr))
+                            .build();
+                     mongoClient = MongoClients.create(mongoClientSettings);
                 }
             }
         }

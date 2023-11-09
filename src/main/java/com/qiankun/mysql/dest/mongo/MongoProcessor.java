@@ -1,8 +1,7 @@
 package com.qiankun.mysql.dest.mongo;
-import com.google.common.collect.Maps;
 
-import com.mongodb.MongoClient;
 import com.mongodb.client.FindIterable;
+import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;

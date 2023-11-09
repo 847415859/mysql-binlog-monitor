@@ -157,10 +157,6 @@ public abstract class AbstractProcessor {
         return modelChangeViewList;
     }
 
-    public static void main(String[] args) {
-        Object bigDecimal = new BigDecimal("1");
-        System.out.println(bigDecimal instanceof BigDecimal);
-    }
 
     /**
      * 装装哪些字段变更记录
