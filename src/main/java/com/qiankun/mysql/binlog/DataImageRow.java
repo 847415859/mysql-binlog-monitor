@@ -58,6 +58,12 @@ public class DataImageRow{
      */
     Map<String,Object> after = Maps.newHashMap();
 
+
+    /**
+     * 数据变更时间戳
+     */
+    long changeTimestamp = System.currentTimeMillis();
+
     public DataImageRow() {
     }
 
@@ -138,6 +144,9 @@ public class DataImageRow{
         this.after = after;
     }
 
+    public Long getChangeTimestamp() {
+        return changeTimestamp;
+    }
 
     @Override
     public String toString() {

@@ -2,11 +2,12 @@ package com.qiankun.mysql;
 
 import com.qiankun.mysql.binlog.EventProcessor;
 import com.qiankun.mysql.binlog.Transaction;
-import com.qiankun.mysql.dest.mongo.MongoAdmin;
 import com.qiankun.mysql.position.BinlogPosition;
 import com.qiankun.mysql.position.BinlogPositionLogThread;
+import com.qiankun.mysql.schemma.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 
 public class Replicator {
 
@@ -15,6 +16,8 @@ public class Replicator {
     private static final Logger POSITION_LOGGER = LoggerFactory.getLogger("PositionLogger");
 
     private Config config;
+
+    private Schema schema;
 
     private EventProcessor eventProcessor;
 
@@ -109,4 +112,11 @@ public class Replicator {
         return nextBinlogPosition;
     }
 
+    public Schema getSchema() {
+        return schema;
+    }
+
+    public void setSchema(Schema schema) {
+        this.schema = schema;
+    }
 }

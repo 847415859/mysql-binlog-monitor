@@ -17,9 +17,14 @@
 
 package com.qiankun.mysql;
 
+import com.google.common.collect.Lists;
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Properties;
 
 
@@ -31,9 +36,14 @@ public class Config {
     public String mysqlPassword;
 
     /**
+     * 需要监控的库，如果不设置则监控所有
+     */
+    public String dbs;
+
+    /**
      * 超过多少数据作为一个批次刷盘
      */
-    public int batchSize = 100;
+    public int batchSize = 1000;
     /**
      * 多次时间默认刷盘一次
      */
@@ -47,12 +57,12 @@ public class Config {
     public Long nextPosition;
     public Integer maxTransactionRows = 100;
 
-    public String mongoAddr = "192.168.126.100";
+    public String mongoAddr = "localhost";
     public Integer mongoPort = 27017;
     public String mongoDb = "ModelLog";
     public String mongoCollection = "ModelLog";
-    public String mongoUsername;
-    public String mongoPassword;
+    public String mongoUsername = "root";
+    public String mongoPassword = "root";
 
 
 
@@ -101,6 +111,13 @@ public class Config {
                 }
             }
         }
+    }
+
+    public List<String> getDbs(){
+        if(StringUtils.isBlank(dbs)){
+            return Lists.newArrayList();
+        }
+        return Arrays.asList(dbs.split(","));
     }
 
     public void setMysqlAddr(String mysqlAddr) {
@@ -169,5 +186,9 @@ public class Config {
 
     public void setInterval(long interval) {
         this.interval = interval;
+    }
+
+    public void setDbs(String dbs) {
+        this.dbs = dbs;
     }
 }

@@ -19,6 +19,8 @@ import javax.sql.DataSource;
 import com.qiankun.mysql.Config;
 import com.qiankun.mysql.Replicator;
 import com.qiankun.mysql.dest.AbstractProcess;
+import com.qiankun.mysql.dest.ModelChangeView;
+import com.qiankun.mysql.dest.ModelLog;
 import com.qiankun.mysql.dest.mongo.MongoProcess;
 import com.qiankun.mysql.position.BinlogPosition;
 import com.qiankun.mysql.position.BinlogPositionManager;
@@ -66,7 +68,6 @@ public class EventProcessor {
 
 
     public EventProcessor(Replicator replicator) {
-
         this.replicator = replicator;
         this.config = replicator.getConfig();
         this.process =  new MongoProcess(replicator);
@@ -79,8 +80,9 @@ public class EventProcessor {
         binlogPositionManager = new BinlogPositionManager(config, dataSource);
         binlogPositionManager.initBeginPosition();
         // 加载监听的数据库信息
-        schema = new Schema(dataSource);
+        schema = new Schema(dataSource,config.getDbs());
         schema.load();
+        replicator.setSchema(schema);
         // mysql 事件监听器
         eventListener = new EventListener(queue);
 
@@ -120,25 +122,25 @@ public class EventProcessor {
                 }
                 switch (event.getHeader().getEventType()) {
                     case TABLE_MAP:
-                        LOGGER.info("EVENT [TABLE_MAP] ..." + event);
+                        LOGGER.debug("EVENT [TABLE_MAP] ..." + event);
                         processTableMapEvent(event);
                         break;
                     // 新增记录
                     case WRITE_ROWS:
                     case EXT_WRITE_ROWS:
-                        LOGGER.info("EVENT [WRITE_ROWS|EXT_WRITE_ROWS]  ..." + event);
+                        LOGGER.debug("EVENT [WRITE_ROWS|EXT_WRITE_ROWS]  ..." + event);
                         processInsertOrDeleteEvent(event,RowEventType.INSERT);
                         break;
                     // 修改记录
                     case UPDATE_ROWS:
                     case EXT_UPDATE_ROWS:
-                        LOGGER.info("EVENT [UPDATE_ROWS|EXT_UPDATE_ROWS] ..." + event);
+                        LOGGER.debug("EVENT [UPDATE_ROWS|EXT_UPDATE_ROWS] ..." + event);
                         processUpdateEvent(event);
                         break;
                     // 删除记录
                     case DELETE_ROWS:
                     case EXT_DELETE_ROWS:
-                        LOGGER.info("EVENT [DELETE_ROWS|EXT_DELETE_ROWS] ..." + event);
+                        LOGGER.debug("EVENT [DELETE_ROWS|EXT_DELETE_ROWS] ..." + event);
                         processInsertOrDeleteEvent(event,RowEventType.DELETE);
                         break;
                     // 查询时间
@@ -147,7 +149,7 @@ public class EventProcessor {
                     case START_V3:
                         break;
                     case QUERY:
-                        LOGGER.info("EVENT [QUERY] ..." + event);
+                        LOGGER.debug("EVENT [QUERY] ..." + event);
                         processQueryEvent(event);
                         break;
 
@@ -178,7 +180,7 @@ public class EventProcessor {
                     case FORMAT_DESCRIPTION:
                         break;
                     case XID:
-                        LOGGER.info("EVENT [XID] ..." + event);
+                        LOGGER.debug("EVENT [XID] ..." + event);
                         // processXidEvent(event);
                         break;
 
@@ -289,7 +291,7 @@ public class EventProcessor {
                 dataImageRow.setId(parserList.get(0).getValue(row[0]));
             }
             process.process(dataImageRow);
-            LOGGER.info("{} :{}",rowEventType.name(),dataImageRow);
+            LOGGER.debug("{} :{}",rowEventType.name(),dataImageRow);
         }
 
     }
@@ -322,7 +324,7 @@ public class EventProcessor {
                 dataImageRow.setId(parserList.get(0).getValue(row.getKey()[0]));
             }
             process.process(dataImageRow);
-            LOGGER.info("insert or update :{}",dataImageRow);
+            LOGGER.debug("update :{}",dataImageRow);
         }
         // TODO
     }

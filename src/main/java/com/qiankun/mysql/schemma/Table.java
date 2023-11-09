@@ -59,4 +59,15 @@ public class Table  {
     public List<Column> getColumnList() {
         return columnList;
     }
+
+    @Override
+    public String toString() {
+        return "Table{" +
+                "database='" + database + '\'' +
+                ", name='" + name + '\'' +
+                ", colList=" + colList +
+                ", columnList=" + columnList +
+                ", parserList=" + parserList +
+                '}';
+    }
 }

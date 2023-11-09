@@ -4,12 +4,10 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import javax.sql.DataSource;
+
+import com.google.common.collect.Lists;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,12 +24,21 @@ public class Schema {
         Arrays.asList(new String[] {"information_schema", "mysql", "performance_schema", "sys"})
     );
 
+    List<String> dbs = Lists.newArrayList();
+
     private DataSource dataSource;
 
     private Map<String, Database> dbMap;
 
     public Schema(DataSource dataSource) {
+        this(dataSource,null);
+    }
+
+    public Schema(DataSource dataSource,List<String> dbs) {
         this.dataSource = dataSource;
+        if(dbs != null && !dbs.isEmpty()) {
+            this.dbs.addAll(dbs);
+        }
     }
 
     /**
@@ -54,7 +61,7 @@ public class Schema {
 
             while (rs.next()) {
                 String dbName = rs.getString(1);
-                if (!IGNORED_DATABASES.contains(dbName)) {
+                if (!IGNORED_DATABASES.contains(dbName) && ( dbs.isEmpty() || dbs.contains(dbName))) {
                     Database database = new Database(dbName, dataSource);
                     dbMap.put(dbName, database);
                 }
@@ -74,6 +81,7 @@ public class Schema {
         }
         // 初始化库源信息
         for (Database db : dbMap.values()) {
+
             db.init();
         }
 
