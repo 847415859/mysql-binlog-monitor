@@ -64,6 +64,8 @@ public class DataImageRow{
      */
     long changeTimestamp = System.currentTimeMillis();
 
+    long nextPosition;
+
     public DataImageRow() {
     }
 
@@ -148,15 +150,30 @@ public class DataImageRow{
         return changeTimestamp;
     }
 
+    public void setChangeTimestamp(long changeTimestamp) {
+        this.changeTimestamp = changeTimestamp;
+    }
+
+    public void setNextPosition(long nextPosition) {
+        this.nextPosition = nextPosition;
+    }
+
+    public long getNextPosition() {
+        return nextPosition;
+    }
+
     @Override
     public String toString() {
         return "DataImageRow{" +
-                "database='" + database + '\'' +
+                "id=" + id +
+                ", database='" + database + '\'' +
                 ", table=" + table +
                 ", type='" + type + '\'' +
                 ", mysqlType='" + mysqlType + '\'' +
                 ", before=" + before +
                 ", after=" + after +
+                ", changeTimestamp=" + changeTimestamp +
+                ", nextPosition=" + nextPosition +
                 '}';
     }
 }

@@ -2,11 +2,15 @@ package com.qiankun.mysql;
 
 import com.qiankun.mysql.binlog.EventProcessor;
 import com.qiankun.mysql.binlog.Transaction;
+import com.qiankun.mysql.dest.AbstractProcessor;
+import com.qiankun.mysql.dest.mongo.MongoProcessor;
 import com.qiankun.mysql.position.BinlogPosition;
 import com.qiankun.mysql.position.BinlogPositionLogThread;
 import com.qiankun.mysql.schemma.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
 
 
 public class Replicator {
@@ -21,10 +25,25 @@ public class Replicator {
 
     private EventProcessor eventProcessor;
 
+    private AbstractProcessor processor;
+
+    public Replicator() {
+        this(null);
+    }
+
+    public Replicator(AbstractProcessor process) {
+        config = new Config();
+        try {
+            config.load();
+        } catch (IOException e) {
+            LOGGER.error("加载配置文件失败：{}",e);
+        }
+        // 默认以mongo的形式来保存数据
+        this.processor = processor != null ? processor : new MongoProcessor(this);
+    }
 
     private final Object lock = new Object();
     private BinlogPosition nextBinlogPosition;
-    private long nextQueueOffset;
     private long xid;
 
     public static void main(String[] args) {
@@ -33,18 +52,13 @@ public class Replicator {
     }
 
     public void start() {
-
         try {
-            config = new Config();
-            config.load();
-
             // 开启一个线程记录binlog文件
             BinlogPositionLogThread binlogPositionLogThread = new BinlogPositionLogThread(this);
             binlogPositionLogThread.start();
-
+            // 事件处理
             eventProcessor = new EventProcessor(this);
             eventProcessor.start();
-
         } catch (Exception e) {
             LOGGER.error("Start error.", e);
             System.exit(1);
@@ -52,30 +66,12 @@ public class Replicator {
     }
 
     /**
-     * 提交数据
+     * 提交数据（表明当前偏移量的数据已经消费）
      * @param transaction
-     * @param isComplete
      */
-    public void commit(Transaction transaction, boolean isComplete) {
-        // String json = transaction.toJson();
-        // LOGGER.info("commit json :{}",json);
-        for (int i = 0; i < 3; i++) {
-            try {
-                if (isComplete) {
-                    synchronized (lock) {
-                        xid = transaction.getXid();
-                        nextBinlogPosition = transaction.getNextBinlogPosition();
-                    }
-
-                } else {
-
-                }
-                break;
-
-            } catch (Exception e) {
-                LOGGER.error("Push error,retry:" + (i + 1) + ",", e);
-            }
-        }
+    public void commit(Transaction transaction) {
+        LOGGER.info("Flush Successful , position :{} ", transaction.getNextBinlogPosition());
+        nextBinlogPosition = transaction.getNextBinlogPosition();
     }
 
     /**
@@ -86,22 +82,18 @@ public class Replicator {
         long xid = 0L;
         long nextPosition = 0L;
         long nextOffset = 0L;
-
-        LOGGER.info("Replicator.logPosition :{}",nextBinlogPosition);
+        LOGGER.debug("Replicator.logPosition :{}",nextBinlogPosition);
         synchronized (lock) {
             // 说明没有 binlog 的变化
             if (nextBinlogPosition != null) {
                 xid = this.xid;
                 binlogFilename = nextBinlogPosition.getBinlogFilename();
                 nextPosition = nextBinlogPosition.getPosition();
-                nextOffset = nextQueueOffset;
             }
         }
-
         if (binlogFilename != null) {
-            POSITION_LOGGER.info(" XID: {},   BINLOG_FILE: {},   NEXT_POSITION: {},   NEXT_OFFSET: {}", xid, binlogFilename, nextPosition, nextOffset);
+            POSITION_LOGGER.debug(" XID: {},   BINLOG_FILE: {},   NEXT_POSITION: {},   NEXT_OFFSET: {}", xid, binlogFilename, nextPosition, nextOffset);
         }
-
     }
 
     public Config getConfig() {
@@ -118,5 +110,13 @@ public class Replicator {
 
     public void setSchema(Schema schema) {
         this.schema = schema;
+    }
+
+    public AbstractProcessor getProcessor() {
+        return processor;
+    }
+
+    public EventProcessor getEventProcessor() {
+        return eventProcessor;
     }
 }

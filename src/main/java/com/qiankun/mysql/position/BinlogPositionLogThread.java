@@ -4,6 +4,9 @@ import com.qiankun.mysql.Replicator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * binlog偏移量记录线程
+ */
 public class BinlogPositionLogThread extends Thread {
     private Logger logger = LoggerFactory.getLogger(BinlogPositionLogThread.class);
 
@@ -13,7 +16,6 @@ public class BinlogPositionLogThread extends Thread {
         this.replicator = replicator;
         setDaemon(true);
     }
-
     @Override
     public void run() {
 
@@ -23,7 +25,6 @@ public class BinlogPositionLogThread extends Thread {
             } catch (InterruptedException e) {
                 logger.error("Offset thread interrupted.", e);
             }
-
             replicator.logPosition();
         }
     }

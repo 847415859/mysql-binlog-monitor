@@ -12,16 +12,16 @@ import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 
 import com.qiankun.mysql.Config;
 import com.qiankun.mysql.Replicator;
-import com.qiankun.mysql.dest.AbstractProcess;
+import com.qiankun.mysql.dest.AbstractProcessor;
 import com.qiankun.mysql.dest.ModelChangeView;
 import com.qiankun.mysql.dest.ModelLog;
-import com.qiankun.mysql.dest.mongo.MongoProcess;
 import com.qiankun.mysql.position.BinlogPosition;
 import com.qiankun.mysql.position.BinlogPositionManager;
 import com.qiankun.mysql.schemma.Schema;
@@ -63,14 +63,18 @@ public class EventProcessor {
 
     private Transaction transaction;
 
-    private AbstractProcess process;
+    private AbstractProcessor processor;
 
+    /**
+     * 默认启动与master创建连接会接受到一个 Rotate 事件，我们不需要关注，我们只需要关注后续的 binlog 文件切换
+     */
+    public AtomicBoolean notFistRotateEvent = new AtomicBoolean(false);
 
 
     public EventProcessor(Replicator replicator) {
         this.replicator = replicator;
         this.config = replicator.getConfig();
-        this.process =  new MongoProcess(replicator);
+        this.processor =  replicator.getProcessor();
     }
 
     public void start() throws Exception {
@@ -105,7 +109,7 @@ public class EventProcessor {
         // 连接 mysql 服务
         binaryLogClient.connect(3000);
 
-        LOGGER.info("Started.");
+        LOGGER.info("EventProcessor Started...");
         doProcess();
     }
 
@@ -156,6 +160,10 @@ public class EventProcessor {
                     case STOP:
                         break;
                     case ROTATE:
+                        // 当mysqld切换到一个新的二进制日志文件时编写的。当有人发出FLUSH LOGS语句或当前二进制日志文件大于max_binlog_size时，就会发生这种情况。
+                        if(notFistRotateEvent.get() || !notFistRotateEvent.compareAndSet(false,true)){
+                            prcessBinlogChangeEvent(event);
+                        }
                         break;
                     case INTVAR:
                         break;
@@ -223,19 +231,13 @@ public class EventProcessor {
     }
 
     /**
-     * 检查连接，如果切换了 binlog 文件
-     * @throws Exception
+     * 处理binlog文件切换问题
+     * @param event
      */
-    private void checkConnection() throws Exception {
-
-        if (!binaryLogClient.isConnected()) {
-            BinlogPosition binlogPosition = replicator.getNextBinlogPosition();
-            if (binlogPosition != null) {
-                binaryLogClient.setBinlogFilename(binlogPosition.getBinlogFilename());
-                binaryLogClient.setBinlogPosition(binlogPosition.getPosition());
-            }
-            binaryLogClient.connect(3000);
-        }
+    private void prcessBinlogChangeEvent(Event event) {
+        RotateEventData data = event.getData();
+        LOGGER.info("Binlog Change Event :{}",data);
+        replicator.commit(new Transaction(new BinlogPosition(data.getBinlogFilename(),data.getBinlogPosition())));
     }
 
     /**
@@ -247,15 +249,15 @@ public class EventProcessor {
         String dbName = data.getDatabase();
         String tableName = data.getTable();
         Long tableId = data.getTableId();
-
         Table table = schema.getTable(dbName, tableName);
-
         tableMap.put(tableId, table);
     }
 
     private void processInsertOrDeleteEvent(Event event,RowEventType rowEventType) {
         Long tableId = null;
         List<Serializable[]> rows = null;
+        // 记录偏移量
+        long nextPosition = getNextPosition(event);
         if(RowEventType.INSERT.equals(rowEventType)){
             WriteRowsEventData data = event.getData();
             tableId = data.getTableId();
@@ -273,6 +275,7 @@ public class EventProcessor {
         if(table == null){
             return;
         }
+        List<DataImageRow> dataImageRowList = new LinkedList<>();
         for (Serializable[] row : rows) {
             // 封装数据修改记录
             DataImageRow dataImageRow = new DataImageRow();
@@ -280,20 +283,23 @@ public class EventProcessor {
             dataImageRow.setTable(table);
             dataImageRow.setType(rowEventType.name());
             dataImageRow.setMysqlType(event.getHeader().getEventType().name());
+            // 根据数据库类型匹配解析器进行转换 => 记录前后镜像
             List<Column> columnList = table.getColumnList();
             List<ColumnParser> parserList = table.getParserList();
             for (Column column : columnList) {
                 ColumnParser columnParser = parserList.get(column.inx);
                 dataImageRow.before.put(column.getColName(),columnParser.getValue(row[column.inx]));
             }
+            dataImageRow.changeTimestamp = event.getHeader().getTimestamp();
             // 默认第一个值就是id
             if(row.length > 0){
                 dataImageRow.setId(parserList.get(0).getValue(row[0]));
             }
-            process.process(dataImageRow);
-            LOGGER.debug("{} :{}",rowEventType.name(),dataImageRow);
+            dataImageRow.setNextPosition(nextPosition);
+            dataImageRowList.add(dataImageRow);
         }
-
+        processor.process(dataImageRowList);
+        LOGGER.debug("{} :{}",rowEventType.name(),dataImageRowList);
     }
 
 
@@ -301,10 +307,13 @@ public class EventProcessor {
         UpdateRowsEventData data = event.getData();
         Long tableId = data.getTableId();
         Table table = tableMap.get(tableId);
+        // 获取下一个事件的偏移量
+        long nextPosition = getNextPosition(event);
         if(table == null){
             return;
         }
         List<Map.Entry<Serializable[], Serializable[]>> rows = data.getRows();
+        List<DataImageRow> dataImageRowList = new LinkedList<>();
         for (Map.Entry<Serializable[], Serializable[]> row : rows) {
             // 封装数据修改记录
             DataImageRow dataImageRow = new DataImageRow();
@@ -312,6 +321,7 @@ public class EventProcessor {
             dataImageRow.setTable(table);
             dataImageRow.setType(RowEventType.UPDATE.name());
             dataImageRow.setMysqlType(event.getHeader().getEventType().name());
+            // 根据数据库类型匹配解析器进行转换 => 记录前后镜像
             List<Column> columnList = table.getColumnList();
             List<ColumnParser> parserList = table.getParserList();
             for (Column column : columnList) {
@@ -319,14 +329,16 @@ public class EventProcessor {
                 dataImageRow.before.put(column.getColName(),columnParser.getValue(row.getKey()[column.inx]));
                 dataImageRow.after.put(column.getColName(),columnParser.getValue(row.getValue()[column.inx]));
             }
+            dataImageRow.changeTimestamp = event.getHeader().getTimestamp();
             // 默认第一个值就是id
             if(row.getKey().length > 0){
                 dataImageRow.setId(parserList.get(0).getValue(row.getKey()[0]));
             }
-            process.process(dataImageRow);
-            LOGGER.debug("update :{}",dataImageRow);
+            dataImageRow.setNextPosition(nextPosition);
+            dataImageRowList.add(dataImageRow);
         }
-        // TODO
+        processor.process(dataImageRowList);
+        LOGGER.debug("update :{}",dataImageRowList);
     }
 
 
@@ -338,25 +350,49 @@ public class EventProcessor {
         }
     }
 
-
-    private void processXidEvent(Event event) {
-        EventHeaderV4 header = event.getHeader();
-        XidEventData data = event.getData();
-
-        String binlogFilename = binaryLogClient.getBinlogFilename();
-        Long position = header.getNextPosition();
-        Long xid = data.getXid();
-
-        BinlogPosition binlogPosition = new BinlogPosition(binlogFilename, position);
-        transaction.setNextBinlogPosition(binlogPosition);
-        transaction.setXid(xid);
-
-        replicator.commit(transaction, true);
-        transaction = new Transaction(config);
+    /**
+     * 检查连接，如果断开连接了，可以从上次记录的 Binlog文件和偏移量继续处理
+     * @throws Exception
+     */
+    private void checkConnection() throws Exception {
+        if (!binaryLogClient.isConnected()) {
+            BinlogPosition binlogPosition = replicator.getNextBinlogPosition();
+            LOGGER.info("Reconnection  binlog position :{}",binlogPosition);
+            if (binlogPosition != null) {
+                binaryLogClient.setBinlogFilename(binlogPosition.getBinlogFilename());
+                binaryLogClient.setBinlogPosition(binlogPosition.getPosition());
+            }
+            binaryLogClient.connect(3000);
+        }
     }
 
 
+    // private void processXidEvent(Event event) {
+    //     EventHeaderV4 header = event.getHeader();
+    //     XidEventData data = event.getData();
+    //
+    //     String binlogFilename = binaryLogClient.getBinlogFilename();
+    //     Long position = header.getNextPosition();
+    //     Long xid = data.getXid();
+    //
+    //     BinlogPosition binlogPosition = new BinlogPosition(binlogFilename, position);
+    //     transaction.setNextBinlogPosition(binlogPosition);
+    //
+    //     replicator.commit(transaction, true);
+    //     transaction = new Transaction(config);
+    // }
 
+
+    /**
+     * 获取下一个偏移量
+     * @param event
+     * @return
+     */
+    private long getNextPosition(Event event) {
+        // 记录偏移量
+        EventHeaderV4 eventHeader = event.getHeader();
+        return eventHeader.getNextPosition();
+    }
 
 
     /**
@@ -384,4 +420,7 @@ public class EventProcessor {
         return config;
     }
 
+    public BinaryLogClient getBinaryLogClient() {
+        return binaryLogClient;
+    }
 }

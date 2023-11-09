@@ -1,11 +1,15 @@
 package com.qiankun.mysql.dest;
+import cn.hutool.core.collection.CollectionUtil;
 import com.alibaba.druid.sql.visitor.functions.Char;
+import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.google.common.collect.Maps;
 
 import com.qiankun.mysql.Config;
 import com.qiankun.mysql.Replicator;
 import com.qiankun.mysql.binlog.DataImageRow;
+import com.qiankun.mysql.binlog.Transaction;
 import com.qiankun.mysql.dest.mongo.MongoAdmin;
+import com.qiankun.mysql.position.BinlogPosition;
 import com.qiankun.mysql.schemma.Schema;
 import com.qiankun.mysql.schemma.Table;
 import com.qiankun.mysql.schemma.column.Column;
@@ -29,9 +33,9 @@ import java.util.stream.Collectors;
  * @Date : 2023/11/08 10:51
  * @Auther : tiankun
  */
-public abstract class AbstractProcess {
+public abstract class AbstractProcessor {
 
-    protected static Logger LOGGER = LoggerFactory.getLogger(AbstractProcess.class);
+    protected static Logger LOGGER = LoggerFactory.getLogger(AbstractProcessor.class);
 
     private Replicator replicator;
 
@@ -56,8 +60,13 @@ public abstract class AbstractProcess {
 
     ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
 
+    /**
+     * binlog事件的下个偏移量
+     */
+    long nextPosition;
 
-    public AbstractProcess(Replicator replicator) {
+
+    public AbstractProcessor(Replicator replicator) {
         this.replicator = replicator;
         Config config = replicator.getConfig();
         batchSize = config.batchSize;
@@ -66,7 +75,6 @@ public abstract class AbstractProcess {
         for (int i = 0; i < cn; i++) {
             c[i] = new ArrayList<>(batchSize << 1);
         }
-
         executorService.scheduleAtFixedRate(() -> {
             LOGGER.debug("Thread 当前容器：{}， lastUpdateTime ：{}, 事件数量：{} data:{}",increment.get() & 1,lastUpdateTime,c[increment.get() & 1].size(),c[increment.get() & 1]);
             if(lastUpdateTime + interval <= System.currentTimeMillis() && !c[increment.get() & cnm].isEmpty()) {
@@ -89,9 +97,14 @@ public abstract class AbstractProcess {
      * @param dataImageRowList
      */
     public void process(List<DataImageRow> dataImageRowList){
+        if (CollectionUtil.isEmpty(dataImageRowList)) {
+            return;
+        }
         List<ModelLog> modelLogList = dataImageRowList.stream().map(this::buildModel).collect(Collectors.toList());
         try {
             c[increment.get() & cnm].addAll(modelLogList);
+            // 记录最后一条消息的 binlog 偏移量
+            nextPosition = dataImageRowList.get(dataImageRowList.size() - 1).getNextPosition();
             if(c[increment.get() & cnm].size() >= batchSize) {
                 batchHandle();
             }
@@ -112,6 +125,11 @@ public abstract class AbstractProcess {
             // 切换接受容器
             increment.incrementAndGet();
             doHandle(batchInsertEventInfos);
+            // 记录提交binlog的偏移量
+            BinaryLogClient binaryLogClient = replicator.getEventProcessor().getBinaryLogClient();
+            BinlogPosition binlogPosition = new BinlogPosition(binaryLogClient.getBinlogFilename(), nextPosition);
+            replicator.commit(new Transaction(binlogPosition));
+
             batchInsertEventInfos.clear();
             lastUpdateTime = System.currentTimeMillis();
         } finally {

@@ -7,13 +7,10 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Filters;
 import com.qiankun.mysql.Replicator;
-import com.qiankun.mysql.dest.AbstractProcess;
+import com.qiankun.mysql.dest.AbstractProcessor;
 import com.qiankun.mysql.dest.ModelLog;
 import com.qiankun.mysql.utils.DateUtils;
-import com.sun.org.apache.xpath.internal.operations.Mod;
-import org.bson.BsonDocument;
 import org.bson.Document;
-import org.bson.conversions.Bson;
 
 import java.util.Date;
 import java.util.LinkedList;
@@ -25,11 +22,11 @@ import java.util.Map;
  * @Date : 2023/11/08 16:25
  * @Auther : tiankun
  */
-public class MongoProcess extends AbstractProcess {
+public class MongoProcessor extends AbstractProcessor {
 
     MongoCollection<Document> collection;
 
-    public MongoProcess(Replicator replicator) {
+    public MongoProcessor(Replicator replicator) {
         super(replicator);
         MongoClient mongoClient = MongoAdmin.getMongoClient(replicator.getConfig());
         MongoDatabase mongoClientDatabase = mongoClient.getDatabase(replicator.getConfig().mongoDb);
