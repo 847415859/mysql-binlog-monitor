@@ -176,7 +176,8 @@ public abstract class AbstractProcessor {
                 Object beforeVal = before.get(colName);
                 Object afterVal = after.get(colName);
                 // 只保留变更的字段信息
-                if((beforeVal != null || afterVal != null) && !equalsVal(beforeVal,afterVal)) {
+                if(replicator.getConfig().containsViewNotMatchField(colName) || (beforeVal != null || afterVal != null)
+                        && !equalsVal(beforeVal,afterVal)) {
                     changeColumnMap.put(colName, new Pair(beforeVal,afterVal));
                 }
             }

@@ -68,6 +68,13 @@ public class Config {
     public String mongoUsername = "root";
     public String mongoPassword = "root";
 
+    /**
+     * Processor
+     */
+    // 对比差异时，不需要对比的列 多个字段,分割开
+    public String viewNotMatchFields;
+    // 对比差异时，不需要对比的列 多个字段, 去除_, 全部转化为小写
+    private List<String> viewNotMatchFieldList;
 
     final static Pattern PATTERN = Pattern.compile("^-\\w+#(include|exclude)$");
 
@@ -78,6 +85,7 @@ public class Config {
         Properties properties = new Properties();
         properties.load(in);
         properties2Object(properties, this);
+
         // 解析包含或者排除的表
         Enumeration<Object> keys = properties.keys();
         while (keys.hasMoreElements()){
@@ -169,6 +177,17 @@ public class Config {
         return predicate == null || predicate.test(tableName);
     }
 
+    public boolean containsViewNotMatchField(String field){
+        if(StringUtils.isBlank(viewNotMatchFields)){
+            return false;
+        }
+        if(viewNotMatchFieldList == null){
+            viewNotMatchFieldList = Arrays.stream(viewNotMatchFields.split(","))
+                    .map(s -> s.replaceAll("_","").toLowerCase())
+                    .collect(Collectors.toList());
+        }
+        return viewNotMatchFieldList.contains(field.replaceAll("_","").toLowerCase());
+    }
 
 
     public void setMysqlAddr(String mysqlAddr) {
@@ -241,6 +260,10 @@ public class Config {
 
     public void setDbs(String dbs) {
         this.dbs = dbs;
+    }
+
+    public void setViewNotMatchFields(String viewNotMatchFields) {
+        this.viewNotMatchFields = viewNotMatchFields;
     }
 
     public static void main(String[] args) {
