@@ -81,6 +81,8 @@ public abstract class AbstractProcessor {
                 batchHandle();
             }
         },0,interval, TimeUnit.MILLISECONDS);
+        // 注册钩子函数，在正常关闭前进行刷盘，尽可能进行刷盘（注意避免一个批次的数据太多）
+        Runtime.getRuntime().addShutdownHook(new Thread(this::batchHandle));
     }
 
     /**
