@@ -15,6 +15,8 @@ import java.io.IOException;
 
 public class Replicator {
 
+    public static Replicator replicator;
+
     private static final Logger LOGGER = LoggerFactory.getLogger(Replicator.class);
 
     private static final Logger POSITION_LOGGER = LoggerFactory.getLogger("PositionLogger");
@@ -32,14 +34,20 @@ public class Replicator {
     }
 
     public Replicator(AbstractProcessor process) {
-        config = new Config();
-        try {
-            config.load();
-        } catch (IOException e) {
-            LOGGER.error("加载配置文件失败：{}",e);
+        synchronized (Replicator.class) {
+            if(Replicator.replicator != null){
+                throw new RuntimeException("Replicator already started! ");
+            }
+            config = new Config();
+            try {
+                config.load();
+            } catch (IOException e) {
+                LOGGER.error("Load setting file error：{}", e);
+            }
+            // 默认以mongo的形式来保存数据
+            this.processor = processor != null ? processor : new MongoProcessor(this);
+            Replicator.replicator = this;
         }
-        // 默认以mongo的形式来保存数据
-        this.processor = processor != null ? processor : new MongoProcessor(this);
     }
 
     private final Object lock = new Object();

@@ -27,6 +27,7 @@ import java.util.*;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 
 public class Config {
@@ -84,16 +85,17 @@ public class Config {
             // 判断是否是tableFilte格式
             if (key.length() > 4 && PATTERN.matcher(key).matches()) {
                 String tables = properties.getProperty(key);
-                List<String> filterTableNames = Arrays.asList(tables.split(","));
+                List<String> filterTableNames = Arrays.asList(tables.split(",")).stream()
+                        .filter(StringUtils::isNoneBlank).collect(Collectors.toList());
                 String db = key.substring(1).split("#")[0];
                 String identifier = key.substring(1).split("#")[1];
                 if (containsDb(db)) {
-                    // 如果包含include，exclude只能存在一个,include优先级高
+                    // 如果包含include，exclude只能存在一个,include优先级高,如果为null，则默认都监控
                     if("include".equals(identifier)){
-                        tablePredicateMap.put(db,tableName -> filterTableNames.contains(tableName));
+                        tablePredicateMap.put(db,tableName -> filterTableNames.isEmpty() || filterTableNames.contains(tableName));
                     }else if("exclude".equals(identifier)){
                         // 如果之前存储过 Predicate ,则不覆盖，避免覆盖之前include的 Predicate
-                        tablePredicateMap.putIfAbsent(db, tableName -> !filterTableNames.contains(tableName));
+                        tablePredicateMap.putIfAbsent(db, tableName -> filterTableNames.isEmpty() || !filterTableNames.contains(tableName));
                     }
                 }
             }
