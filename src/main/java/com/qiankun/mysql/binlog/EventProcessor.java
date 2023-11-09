@@ -84,7 +84,7 @@ public class EventProcessor {
         binlogPositionManager = new BinlogPositionManager(config, dataSource);
         binlogPositionManager.initBeginPosition();
         // 加载监听的数据库信息
-        schema = new Schema(dataSource,config.getDbs());
+        schema = new Schema(dataSource,config);
         schema.load();
         replicator.setSchema(schema);
         // mysql 事件监听器

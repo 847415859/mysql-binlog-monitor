@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 import javax.sql.DataSource;
 
+import com.qiankun.mysql.Config;
 import com.qiankun.mysql.schemma.column.Column;
 import com.qiankun.mysql.schemma.column.ColumnParser;
 import org.slf4j.Logger;
@@ -37,6 +38,9 @@ public class Database {
      */
     private DataSource dataSource;
 
+
+    private Config config;
+
     /**
      * 表名信息
      */
@@ -45,6 +49,12 @@ public class Database {
     public Database(String name, DataSource dataSource) {
         this.name = name;
         this.dataSource = dataSource;
+    }
+
+    public Database(String name, DataSource dataSource, Config config) {
+        this.name = name;
+        this.dataSource = dataSource;
+        this.config = config;
     }
 
     public void init() throws SQLException {
@@ -61,11 +71,15 @@ public class Database {
 
             while (rs.next()) {
                 String tableName = rs.getString(1);
+                String dbName = rs.getString(6);
+                // 排除不需要监控的表
+                if(!config.containsTable(dbName,tableName)){
+                    continue;
+                }
                 String colName = rs.getString(2);
                 String dataType = rs.getString(3);
                 String colType = rs.getString(4);
                 String charset = rs.getString(5);
-                String db = rs.getString(6);
                 int idx = rs.getInt(7) - 1;
                 // 根据mysql的数据类型，匹配数据解析器
                 ColumnParser columnParser = ColumnParser.getColumnParser(dataType, colType, charset);
@@ -75,7 +89,7 @@ public class Database {
                 }
                 Table table = tableMap.get(tableName);
                 table.addCol(colName);
-                table.addColumn(new Column(db,tableName,idx,colName,dataType,colType));
+                table.addColumn(new Column(dbName,tableName,idx,colName,dataType,colType));
                 table.addParser(columnParser);
             }
 

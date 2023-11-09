@@ -8,6 +8,7 @@ import java.util.*;
 import javax.sql.DataSource;
 
 import com.google.common.collect.Lists;
+import com.qiankun.mysql.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -24,9 +25,9 @@ public class Schema {
         Arrays.asList(new String[] {"information_schema", "mysql", "performance_schema", "sys"})
     );
 
-    List<String> dbs = Lists.newArrayList();
-
     private DataSource dataSource;
+
+    private Config config;
 
     private Map<String, Database> dbMap;
 
@@ -34,11 +35,9 @@ public class Schema {
         this(dataSource,null);
     }
 
-    public Schema(DataSource dataSource,List<String> dbs) {
+    public Schema(DataSource dataSource, Config config ){
         this.dataSource = dataSource;
-        if(dbs != null && !dbs.isEmpty()) {
-            this.dbs.addAll(dbs);
-        }
+        this.config = config;
     }
 
     /**
@@ -61,8 +60,8 @@ public class Schema {
 
             while (rs.next()) {
                 String dbName = rs.getString(1);
-                if (!IGNORED_DATABASES.contains(dbName) && ( dbs.isEmpty() || dbs.contains(dbName))) {
-                    Database database = new Database(dbName, dataSource);
+                if (!IGNORED_DATABASES.contains(dbName) && ( config.containsDb(dbName))) {
+                    Database database = new Database(dbName, dataSource,config);
                     dbMap.put(dbName, database);
                 }
             }
@@ -81,7 +80,6 @@ public class Schema {
         }
         // 初始化库源信息
         for (Database db : dbMap.values()) {
-
             db.init();
         }
 

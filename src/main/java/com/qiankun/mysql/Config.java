@@ -23,9 +23,10 @@ import org.apache.commons.lang3.StringUtils;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
+import java.util.function.Predicate;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 public class Config {
@@ -39,6 +40,8 @@ public class Config {
      * 需要监控的库，如果不设置则监控所有
      */
     public String dbs;
+
+    public Map<String, Predicate<String>> tablePredicateMap = new HashMap<>();
 
     /**
      * 超过多少数据作为一个批次刷盘
@@ -65,12 +68,36 @@ public class Config {
     public String mongoPassword = "root";
 
 
+    final static Pattern PATTERN = Pattern.compile("^-\\w+#(include|exclude)$");
+
+
 
     public void load() throws IOException {
         InputStream in = Config.class.getClassLoader().getResourceAsStream("mysql-monitor.conf");
         Properties properties = new Properties();
         properties.load(in);
         properties2Object(properties, this);
+        // 解析包含或者排除的表
+        Enumeration<Object> keys = properties.keys();
+        while (keys.hasMoreElements()){
+            String key = keys.nextElement().toString();
+            // 判断是否是tableFilte格式
+            if (key.length() > 4 && PATTERN.matcher(key).matches()) {
+                String tables = properties.getProperty(key);
+                List<String> filterTableNames = Arrays.asList(tables.split(","));
+                String db = key.substring(1).split("#")[0];
+                String identifier = key.substring(1).split("#")[1];
+                if (containsDb(db)) {
+                    // 如果包含include，exclude只能存在一个,include优先级高
+                    if("include".equals(identifier)){
+                        tablePredicateMap.put(db,tableName -> filterTableNames.contains(tableName));
+                    }else if("exclude".equals(identifier)){
+                        // 如果之前存储过 Predicate ,则不覆盖，避免覆盖之前include的 Predicate
+                        tablePredicateMap.putIfAbsent(db, tableName -> !filterTableNames.contains(tableName));
+                    }
+                }
+            }
+        }
     }
 
     private void properties2Object(final Properties p, final Object object) {
@@ -119,6 +146,28 @@ public class Config {
         }
         return Arrays.asList(dbs.split(","));
     }
+
+    /**
+     * 判断是否监控表
+     * @param dbName    库名
+     * @return
+     */
+    public boolean containsDb(String dbName){
+        return getDbs().contains(dbName);
+    }
+
+    /**
+     * 配置当前表是否需要进行监控
+     * @param dbName        库名
+     * @param tableName     表明
+     * @return
+     */
+    public boolean containsTable(String dbName,String tableName){
+        Predicate<String> predicate = tablePredicateMap.get(dbName);
+        return predicate == null || predicate.test(tableName);
+    }
+
+
 
     public void setMysqlAddr(String mysqlAddr) {
         this.mysqlAddr = mysqlAddr;
@@ -190,5 +239,12 @@ public class Config {
 
     public void setDbs(String dbs) {
         this.dbs = dbs;
+    }
+
+    public static void main(String[] args) {
+        Pattern pattern = Pattern.compile("^-\\w+#(include|exclude)$");
+        String str = "-portal#include1";
+        Matcher matcher = pattern.matcher(str);
+        System.out.println("matcher.matches() = " + matcher.matches());
     }
 }
