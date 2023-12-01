@@ -23,12 +23,12 @@ public class ViewController {
 
     @GetMapping("/viewChange")
     public Map viewChange(String modelId){
-        if(StringUtils.isEmpty(modelId) || Replicator.replicator == null || Replicator.replicator.getProcessor() == null){
-            return null;
-        }
-        AbstractProcessor processor = Replicator.replicator.getProcessor();
+        // if(StringUtils.isEmpty(modelId) || Replicator.replicator == null || Replicator.replicator.getProcessor() == null){
+        //     return null;
+        // }
+        // AbstractProcessor processor = Replicator.replicator.getProcessor();
         Map<String,Object> result = new HashMap<>();
-        result.put("data",processor.viewChange(modelId));
+        // result.put("data",processor.viewChange(modelId));
         return result;
     }
 }

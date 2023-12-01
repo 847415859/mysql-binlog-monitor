@@ -10,7 +10,11 @@ import com.qiankun.mysql.schemma.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.channels.FileChannel;
 
 
 public class Replicator {
@@ -27,13 +31,8 @@ public class Replicator {
 
     private EventProcessor eventProcessor;
 
-    private AbstractProcessor processor;
 
     public Replicator() {
-        this(null);
-    }
-
-    public Replicator(AbstractProcessor process) {
         synchronized (Replicator.class) {
             if(Replicator.replicator != null){
                 throw new RuntimeException("Replicator already started! ");
@@ -45,7 +44,6 @@ public class Replicator {
                 LOGGER.error("Load setting file error：{}", e);
             }
             // 默认以mongo的形式来保存数据
-            this.processor = processor != null ? processor : new MongoProcessor(this);
             Replicator.replicator = this;
         }
     }
@@ -97,6 +95,14 @@ public class Replicator {
                 xid = this.xid;
                 binlogFilename = nextBinlogPosition.getBinlogFilename();
                 nextPosition = nextBinlogPosition.getPosition();
+                try {
+                    RandomAccessFile raf  = new RandomAccessFile(new File("./position"),"rw");
+                    raf.writeShort(binlogFilename.length());
+                    raf.writeBytes(binlogFilename);
+                    raf.writeLong(nextOffset);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
         }
         if (binlogFilename != null) {
@@ -120,9 +126,6 @@ public class Replicator {
         this.schema = schema;
     }
 
-    public AbstractProcessor getProcessor() {
-        return processor;
-    }
 
     public EventProcessor getEventProcessor() {
         return eventProcessor;

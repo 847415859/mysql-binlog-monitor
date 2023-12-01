@@ -10,6 +10,7 @@ import com.qiankun.mysql.dest.AbstractProcessor;
 import com.qiankun.mysql.dest.ModelLog;
 import com.qiankun.mysql.utils.DateUtils;
 import org.bson.Document;
+import org.springframework.util.CollectionUtils;
 
 import java.util.Date;
 import java.util.LinkedList;
@@ -25,17 +26,18 @@ public class MongoProcessor extends AbstractProcessor {
 
     MongoCollection<Document> collection;
 
-    public MongoProcessor(Replicator replicator) {
-        super(replicator);
-        MongoClient mongoClient = MongoAdmin.getMongoClient(replicator.getConfig());
-        MongoDatabase mongoClientDatabase = mongoClient.getDatabase(replicator.getConfig().mongoDb);
-        this.collection = mongoClientDatabase.getCollection(replicator.getConfig().mongoCollection);
+    public MongoProcessor() {
+        MongoClient mongoClient = MongoAdmin.getMongoClient(Replicator.replicator.getConfig());
+        MongoDatabase mongoClientDatabase = mongoClient.getDatabase(Replicator.replicator.getConfig().mongoDb);
+        this.collection = mongoClientDatabase.getCollection(Replicator.replicator.getConfig().mongoCollection);
     }
 
     @Override
     public void doHandle(List<ModelLog> modelLogList) {
-        List<Document> documentList = buildDocument(modelLogList);
-        collection.insertMany(documentList);
+        if(!CollectionUtils.isEmpty(modelLogList)) {
+            List<Document> documentList = buildDocument(modelLogList);
+            collection.insertMany(documentList);
+        }
     }
 
     @Override

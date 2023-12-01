@@ -1,5 +1,8 @@
 package com.qiankun.mysql.position;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -49,6 +52,19 @@ public class BinlogPositionManager {
      * @throws SQLException
      */
     private void initPositionFromBinlogTail() throws SQLException {
+
+        // try {
+        //     RandomAccessFile raf  = new RandomAccessFile(new File("./position"),"rw");
+        //     short binlogNameLength = raf.readShort();
+        //     byte[] filenameBytes = new byte[binlogNameLength];
+        //     raf.read(filenameBytes,1,binlogNameLength);
+        //     long position = raf.readLong();
+        //     System.out.println("读取到的binlog文件名：" + new String(filenameBytes));
+        //     System.out.println("读取到的binlog.position：" + position);
+        // } catch (IOException e) {
+        //     e.printStackTrace();
+        // }
+
         String sql = "SHOW MASTER STATUS";
         Connection conn = null;
         ResultSet rs = null;

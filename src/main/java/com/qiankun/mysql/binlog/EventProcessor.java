@@ -5,11 +5,9 @@ import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.github.shyiko.mysql.binlog.event.*;
 import com.github.shyiko.mysql.binlog.event.deserialization.EventDeserializer;
 import java.io.Serializable;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -17,11 +15,19 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 
+import com.lmax.disruptor.BlockingWaitStrategy;
+import com.lmax.disruptor.RingBuffer;
+import com.lmax.disruptor.dsl.Disruptor;
+import com.lmax.disruptor.dsl.ProducerType;
 import com.qiankun.mysql.Config;
 import com.qiankun.mysql.Replicator;
 import com.qiankun.mysql.dest.AbstractProcessor;
 import com.qiankun.mysql.dest.ModelChangeView;
 import com.qiankun.mysql.dest.ModelLog;
+import com.qiankun.mysql.dest.mongo.MongoProcessor;
+import com.qiankun.mysql.disruptor.factory.DataImageRowEventFactory;
+import com.qiankun.mysql.disruptor.producer.EventProducer;
+import com.qiankun.mysql.disruptor.producer.impl.DefaultEventProducer;
 import com.qiankun.mysql.position.BinlogPosition;
 import com.qiankun.mysql.position.BinlogPositionManager;
 import com.qiankun.mysql.schemma.Schema;
@@ -63,7 +69,10 @@ public class EventProcessor {
 
     private Transaction transaction;
 
-    private AbstractProcessor processor;
+    /**
+     * disruptor 事件生产者
+     */
+    private EventProducer eventProducer;
 
     /**
      * 默认启动与master创建连接会接受到一个 Rotate 事件，我们不需要关注，我们只需要关注后续的 binlog 文件切换
@@ -74,7 +83,22 @@ public class EventProcessor {
     public EventProcessor(Replicator replicator) {
         this.replicator = replicator;
         this.config = replicator.getConfig();
-        this.processor =  replicator.getProcessor();
+        //创建disruptor
+        Disruptor<DataImageRow> disruptor = new Disruptor<>(
+                new DataImageRowEventFactory(),
+                1024 * 1024,
+                Executors.defaultThreadFactory(),
+                ProducerType.SINGLE,        //单生产者
+                new BlockingWaitStrategy()  //等待策略
+        );
+        //设置消费者用于处理RingBuffer的事件
+        ServiceLoader<AbstractProcessor> serviceLoader = ServiceLoader.load(AbstractProcessor.class);
+        Iterator<AbstractProcessor> abstractProcessorIterator = serviceLoader.iterator();
+        boolean hasNext = abstractProcessorIterator.hasNext();
+        disruptor.handleEventsWith(hasNext ? abstractProcessorIterator.next() : new MongoProcessor());
+        disruptor.start();
+        //创建ringbuffer容器
+        eventProducer = new DefaultEventProducer(disruptor.getRingBuffer());
     }
 
     public void start() throws Exception {
@@ -110,6 +134,10 @@ public class EventProcessor {
         binaryLogClient.connect(3000);
 
         LOGGER.info("EventProcessor Started...");
+        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+        for (StackTraceElement stackTraceElement : stackTrace) {
+            LOGGER.info("调用链路 :{}",stackTraceElement);
+        }
         doProcess();
     }
 
@@ -275,7 +303,6 @@ public class EventProcessor {
         if(table == null){
             return;
         }
-        List<DataImageRow> dataImageRowList = new LinkedList<>();
         for (Serializable[] row : rows) {
             // 封装数据修改记录
             DataImageRow dataImageRow = new DataImageRow();
@@ -296,10 +323,8 @@ public class EventProcessor {
                 dataImageRow.setId(parserList.get(0).getValue(row[0]));
             }
             dataImageRow.setNextPosition(nextPosition);
-            dataImageRowList.add(dataImageRow);
+            eventProducer.onData(dataImageRow);
         }
-        processor.process(dataImageRowList);
-        LOGGER.debug("{} :{}",rowEventType.name(),dataImageRowList);
     }
 
 
@@ -313,7 +338,6 @@ public class EventProcessor {
             return;
         }
         List<Map.Entry<Serializable[], Serializable[]>> rows = data.getRows();
-        List<DataImageRow> dataImageRowList = new LinkedList<>();
         for (Map.Entry<Serializable[], Serializable[]> row : rows) {
             // 封装数据修改记录
             DataImageRow dataImageRow = new DataImageRow();
@@ -335,10 +359,8 @@ public class EventProcessor {
                 dataImageRow.setId(parserList.get(0).getValue(row.getKey()[0]));
             }
             dataImageRow.setNextPosition(nextPosition);
-            dataImageRowList.add(dataImageRow);
+            eventProducer.onData(dataImageRow);
         }
-        processor.process(dataImageRowList);
-        LOGGER.debug("update :{}",dataImageRowList);
     }
 
 

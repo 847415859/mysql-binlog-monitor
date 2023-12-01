@@ -4,6 +4,7 @@ import com.alibaba.druid.sql.visitor.functions.Char;
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.google.common.collect.Maps;
 
+import com.lmax.disruptor.EventHandler;
 import com.qiankun.mysql.Config;
 import com.qiankun.mysql.Replicator;
 import com.qiankun.mysql.binlog.DataImageRow;
@@ -33,11 +34,10 @@ import java.util.stream.Collectors;
  * @Date : 2023/11/08 10:51
  * @Auther : tiankun
  */
-public abstract class AbstractProcessor {
+public abstract class AbstractProcessor implements EventHandler<DataImageRow> {
 
     protected static Logger LOGGER = LoggerFactory.getLogger(AbstractProcessor.class);
 
-    private Replicator replicator;
 
     int batchSize;
 
@@ -66,9 +66,8 @@ public abstract class AbstractProcessor {
     long nextPosition;
 
 
-    public AbstractProcessor(Replicator replicator) {
-        this.replicator = replicator;
-        Config config = replicator.getConfig();
+    public AbstractProcessor() {
+        Config config = Replicator.replicator.getConfig();
         batchSize = config.batchSize;
         interval = config.interval;
         // 初始化容器
@@ -82,7 +81,17 @@ public abstract class AbstractProcessor {
             }
         },0,interval, TimeUnit.MILLISECONDS);
         // 注册钩子函数，在正常关闭前进行刷盘，尽可能进行刷盘（注意避免一个批次的数据太多）
-        Runtime.getRuntime().addShutdownHook(new Thread(this::batchHandle));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            if (c[increment.get() & cnm].isEmpty()) {
+                batchHandle();
+            }
+        }));
+    }
+
+
+    @Override
+    public void onEvent(DataImageRow event, long sequence, boolean endOfBatch) throws Exception {
+        process(event);
     }
 
     /**
@@ -128,9 +137,9 @@ public abstract class AbstractProcessor {
             increment.incrementAndGet();
             doHandle(batchInsertEventInfos);
             // 记录提交binlog的偏移量
-            BinaryLogClient binaryLogClient = replicator.getEventProcessor().getBinaryLogClient();
+            BinaryLogClient binaryLogClient = Replicator.replicator.getEventProcessor().getBinaryLogClient();
             BinlogPosition binlogPosition = new BinlogPosition(binaryLogClient.getBinlogFilename(), nextPosition);
-            replicator.commit(new Transaction(binlogPosition));
+            Replicator.replicator.commit(new Transaction(binlogPosition));
 
             batchInsertEventInfos.clear();
             lastUpdateTime = System.currentTimeMillis();
@@ -167,7 +176,7 @@ public abstract class AbstractProcessor {
      */
     private Map<String, Pair> buildChangeColumnMap(ModelLog modelLog) {
         Map<String,Pair> changeColumnMap = new LinkedHashMap<>();
-        Schema schema = replicator.getSchema();
+        Schema schema = Replicator.replicator.getSchema();
         Table table = schema.getTable(modelLog.getDatabase(), modelLog.getTable());
         if(table != null){
             List<Column> columnList = table.getColumnList();
@@ -178,7 +187,7 @@ public abstract class AbstractProcessor {
                 Object beforeVal = before.get(colName);
                 Object afterVal = after.get(colName);
                 // 只保留变更的字段信息
-                if(replicator.getConfig().containsViewNotMatchField(colName) || (beforeVal != null || afterVal != null)
+                if(Replicator.replicator.getConfig().containsViewNotMatchField(colName) || (beforeVal != null || afterVal != null)
                         && !equalsVal(beforeVal,afterVal)) {
                     changeColumnMap.put(colName, new Pair(beforeVal,afterVal));
                 }
