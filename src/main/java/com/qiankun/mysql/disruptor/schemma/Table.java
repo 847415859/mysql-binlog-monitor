@@ -1,11 +1,10 @@
-package com.qiankun.mysql.schemma;
+package com.qiankun.mysql.disruptor.schemma;
 
-import java.io.Serializable;
 import java.util.LinkedList;
 import java.util.List;
 
-import com.qiankun.mysql.schemma.column.Column;
-import com.qiankun.mysql.schemma.column.ColumnParser;
+import com.qiankun.mysql.disruptor.schemma.column.Column;
+import com.qiankun.mysql.disruptor.schemma.column.ColumnParser;
 
 /**
  * 表结构信息

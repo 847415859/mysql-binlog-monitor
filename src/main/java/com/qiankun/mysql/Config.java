@@ -19,6 +19,7 @@ package com.qiankun.mysql;
 
 import com.google.common.collect.Lists;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.util.CollectionUtils;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -64,6 +65,7 @@ public class Config {
     public String mongoAddr = "localhost";
     public Integer mongoPort = 27017;
     public String mongoDb = "ModelLog";
+    public String authSource = "admin";
     public String mongoCollection = "ModelLog";
     public String mongoUsername = "root";
     public String mongoPassword = "root";
@@ -79,13 +81,8 @@ public class Config {
     final static Pattern PATTERN = Pattern.compile("^-\\w+#(include|exclude)$");
 
 
-
-    public void load() throws IOException {
-        InputStream in = Config.class.getClassLoader().getResourceAsStream("mysql-monitor.conf");
-        Properties properties = new Properties();
-        properties.load(in);
+    public void load(Properties properties) throws IOException {
         properties2Object(properties, this);
-
         // 解析包含或者排除的表
         Enumeration<Object> keys = properties.keys();
         while (keys.hasMoreElements()){
@@ -100,14 +97,42 @@ public class Config {
                 if (containsDb(db)) {
                     // 如果包含include，exclude只能存在一个,include优先级高,如果为null，则默认都监控
                     if("include".equals(identifier)){
-                        tablePredicateMap.put(db,tableName -> filterTableNames.isEmpty() || filterTableNames.contains(tableName));
+                        tablePredicateMap.put(db,tableName -> filterTableNames.isEmpty() || filterTableNames.contains(tableName) || prefixFuzzy(filterTableNames, tableName));
                     }else if("exclude".equals(identifier)){
                         // 如果之前存储过 Predicate ,则不覆盖，避免覆盖之前include的 Predicate
-                        tablePredicateMap.putIfAbsent(db, tableName -> filterTableNames.isEmpty() || !filterTableNames.contains(tableName));
+                        tablePredicateMap.putIfAbsent(db, tableName -> filterTableNames.isEmpty() || !filterTableNames.contains(tableName) || prefixFuzzy(filterTableNames, tableName));
                     }
                 }
             }
         }
+    }
+
+    /**
+     * 前缀匹配
+     * @param filterTableNames
+     * @param tableName
+     * @return
+     */
+    private boolean prefixFuzzy(List<String> filterTableNames, String tableName) {
+        if(CollectionUtils.isEmpty(filterTableNames)){
+            return false;
+        }
+        List<String> fuzzyTableNames = filterTableNames.stream().filter(StringUtils::isNotBlank).filter(i -> i.endsWith("*")).collect(Collectors.toList());
+        if(CollectionUtils.isEmpty(fuzzyTableNames)){
+            return false;
+        }
+        return fuzzyTableNames.stream().anyMatch(fuzzyTableName -> tableName.startsWith(fuzzyTableName.replaceAll("\\*", "")));
+    }
+
+
+
+
+    public void load() throws IOException {
+        InputStream in = Config.class.getClassLoader().getResourceAsStream("mysql-monitor.conf");
+        Properties properties = new Properties();
+        properties.load(in);
+
+        load(properties);
     }
 
     private void properties2Object(final Properties p, final Object object) {
@@ -264,6 +289,10 @@ public class Config {
 
     public void setViewNotMatchFields(String viewNotMatchFields) {
         this.viewNotMatchFields = viewNotMatchFields;
+    }
+
+    public void setAuthSource(String authSource) {
+        this.authSource = authSource;
     }
 
     public static void main(String[] args) {

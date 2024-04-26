@@ -1,4 +1,4 @@
-package com.qiankun.mysql.schemma;
+package com.qiankun.mysql.disruptor.schemma;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -9,8 +9,8 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import com.qiankun.mysql.Config;
-import com.qiankun.mysql.schemma.column.Column;
-import com.qiankun.mysql.schemma.column.ColumnParser;
+import com.qiankun.mysql.disruptor.schemma.column.Column;
+import com.qiankun.mysql.disruptor.schemma.column.ColumnParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

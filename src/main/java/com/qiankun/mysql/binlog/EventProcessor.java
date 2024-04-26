@@ -12,28 +12,24 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import javax.sql.DataSource;
 
 import com.lmax.disruptor.BlockingWaitStrategy;
-import com.lmax.disruptor.RingBuffer;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import com.qiankun.mysql.Config;
 import com.qiankun.mysql.Replicator;
 import com.qiankun.mysql.dest.AbstractProcessor;
-import com.qiankun.mysql.dest.ModelChangeView;
-import com.qiankun.mysql.dest.ModelLog;
 import com.qiankun.mysql.dest.mongo.MongoProcessor;
 import com.qiankun.mysql.disruptor.factory.DataImageRowEventFactory;
 import com.qiankun.mysql.disruptor.producer.EventProducer;
 import com.qiankun.mysql.disruptor.producer.impl.DefaultEventProducer;
 import com.qiankun.mysql.position.BinlogPosition;
 import com.qiankun.mysql.position.BinlogPositionManager;
-import com.qiankun.mysql.schemma.Schema;
-import com.qiankun.mysql.schemma.Table;
-import com.qiankun.mysql.schemma.column.Column;
-import com.qiankun.mysql.schemma.column.ColumnParser;
+import com.qiankun.mysql.disruptor.schemma.Schema;
+import com.qiankun.mysql.disruptor.schemma.Table;
+import com.qiankun.mysql.disruptor.schemma.column.Column;
+import com.qiankun.mysql.disruptor.schemma.column.ColumnParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,6 +70,8 @@ public class EventProcessor {
      */
     private EventProducer eventProducer;
 
+    private AbstractProcessor processor;
+
     /**
      * 默认启动与master创建连接会接受到一个 Rotate 事件，我们不需要关注，我们只需要关注后续的 binlog 文件切换
      */
@@ -95,7 +93,8 @@ public class EventProcessor {
         ServiceLoader<AbstractProcessor> serviceLoader = ServiceLoader.load(AbstractProcessor.class);
         Iterator<AbstractProcessor> abstractProcessorIterator = serviceLoader.iterator();
         boolean hasNext = abstractProcessorIterator.hasNext();
-        disruptor.handleEventsWith(hasNext ? abstractProcessorIterator.next() : new MongoProcessor());
+        processor = hasNext ? abstractProcessorIterator.next() : new MongoProcessor();
+        disruptor.handleEventsWith(processor);
         disruptor.start();
         //创建ringbuffer容器
         eventProducer = new DefaultEventProducer(disruptor.getRingBuffer());
@@ -134,10 +133,10 @@ public class EventProcessor {
         binaryLogClient.connect(3000);
 
         LOGGER.info("EventProcessor Started...");
-        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-        for (StackTraceElement stackTraceElement : stackTrace) {
-            LOGGER.info("调用链路 :{}",stackTraceElement);
-        }
+        // StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+        // for (StackTraceElement stackTraceElement : stackTrace) {
+        //     LOGGER.info("调用链路 :{}",stackTraceElement);
+        // }
         doProcess();
     }
 
@@ -190,7 +189,7 @@ public class EventProcessor {
                     case ROTATE:
                         // 当mysqld切换到一个新的二进制日志文件时编写的。当有人发出FLUSH LOGS语句或当前二进制日志文件大于max_binlog_size时，就会发生这种情况。
                         if(notFistRotateEvent.get() || !notFistRotateEvent.compareAndSet(false,true)){
-                            prcessBinlogChangeEvent(event);
+                            processBinlogChangeEvent(event);
                         }
                         break;
                     case INTVAR:
@@ -262,9 +261,9 @@ public class EventProcessor {
      * 处理binlog文件切换问题
      * @param event
      */
-    private void prcessBinlogChangeEvent(Event event) {
+    private void processBinlogChangeEvent(Event event) {
         RotateEventData data = event.getData();
-        LOGGER.info("Binlog Change Event :{}",data);
+        LOGGER.debug("Binlog Change Event :{}",data);
         replicator.commit(new Transaction(new BinlogPosition(data.getBinlogFilename(),data.getBinlogPosition())));
     }
 
@@ -444,5 +443,9 @@ public class EventProcessor {
 
     public BinaryLogClient getBinaryLogClient() {
         return binaryLogClient;
+    }
+
+    public AbstractProcessor getProcessor() {
+        return processor;
     }
 }

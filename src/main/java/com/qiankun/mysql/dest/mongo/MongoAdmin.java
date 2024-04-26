@@ -5,6 +5,7 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClientFactory;
 import com.mongodb.client.MongoClients;
 import com.qiankun.mysql.Config;
+import org.apache.commons.lang3.StringUtils;
 
 
 /**
@@ -21,7 +22,9 @@ public class MongoAdmin {
             synchronized (MongoClient.class){
                 if(mongoClient == null){
                     String addr="mongodb://"+config.mongoAddr+":"+config.mongoPort;
-                    MongoCredential credential = MongoCredential.createCredential(config.mongoUsername, config.mongoDb, config.mongoPassword.toCharArray());
+                    MongoCredential credential = StringUtils.isBlank(config.authSource) ?
+                            MongoCredential.createCredential(config.mongoUsername, config.mongoDb, config.mongoPassword.toCharArray()) :
+                            MongoCredential.createScramSha1Credential(config.mongoUsername, config.authSource, config.mongoPassword.toCharArray());
                     MongoClientSettings mongoClientSettings = MongoClientSettings.builder()
                             .credential(credential)
                             .applyConnectionString(new ConnectionString(addr))

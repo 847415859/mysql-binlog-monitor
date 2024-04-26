@@ -1,14 +1,9 @@
 package com.qiankun.mysql.binlog;
 
 import com.google.common.collect.Maps;
-import com.qiankun.mysql.schemma.Table;
-import com.qiankun.mysql.schemma.column.ColumnParser;
+import com.qiankun.mysql.disruptor.schemma.Table;
 import org.apache.commons.lang3.StringUtils;
 
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**

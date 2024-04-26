@@ -1,4 +1,4 @@
-package com.qiankun.mysql.schemma.column;
+package com.qiankun.mysql.disruptor.schemma.column;
 
 import org.apache.commons.codec.Charsets;
 

@@ -1,4 +1,4 @@
-package com.qiankun.mysql.schemma;
+package com.qiankun.mysql.disruptor.schemma;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -7,7 +7,6 @@ import java.sql.SQLException;
 import java.util.*;
 import javax.sql.DataSource;
 
-import com.google.common.collect.Lists;
 import com.qiankun.mysql.Config;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

@@ -1,4 +1,4 @@
-package com.qiankun.mysql.schemma.column;
+package com.qiankun.mysql.disruptor.schemma.column;
 
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;

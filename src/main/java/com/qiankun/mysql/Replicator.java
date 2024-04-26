@@ -2,19 +2,17 @@ package com.qiankun.mysql;
 
 import com.qiankun.mysql.binlog.EventProcessor;
 import com.qiankun.mysql.binlog.Transaction;
-import com.qiankun.mysql.dest.AbstractProcessor;
-import com.qiankun.mysql.dest.mongo.MongoProcessor;
 import com.qiankun.mysql.position.BinlogPosition;
 import com.qiankun.mysql.position.BinlogPositionLogThread;
-import com.qiankun.mysql.schemma.Schema;
+import com.qiankun.mysql.disruptor.schemma.Schema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.RandomAccessFile;
-import java.nio.channels.FileChannel;
+import java.util.Properties;
 
 
 public class Replicator {
@@ -48,12 +46,32 @@ public class Replicator {
         }
     }
 
+    public Replicator(Properties properties) {
+        synchronized (Replicator.class) {
+            if(Replicator.replicator != null){
+                throw new RuntimeException("Replicator already started! ");
+            }
+            config = new Config();
+            try {
+                config.load(properties);
+            } catch (IOException e) {
+                LOGGER.error("Load setting file error：{}", e);
+            }
+            // 默认以mongo的形式来保存数据
+            Replicator.replicator = this;
+        }
+    }
+
     private final Object lock = new Object();
     private BinlogPosition nextBinlogPosition;
     private long xid;
 
-    public static void main(String[] args) {
-        Replicator replicator = new Replicator();
+    public static void main(String[] args) throws IOException {
+        InputStream in = Config.class.getClassLoader().getResourceAsStream("mysql-monitor.conf");
+        Properties properties = new Properties();
+        properties.load(in);
+
+        Replicator replicator = new Replicator(properties);
         replicator.start();
     }
 
@@ -76,7 +94,7 @@ public class Replicator {
      * @param transaction
      */
     public void commit(Transaction transaction) {
-        LOGGER.info("Flush Successful , position :{} ", transaction.getNextBinlogPosition());
+        LOGGER.debug("Flush Successful , position :{} ", transaction.getNextBinlogPosition());
         nextBinlogPosition = transaction.getNextBinlogPosition();
     }
 
