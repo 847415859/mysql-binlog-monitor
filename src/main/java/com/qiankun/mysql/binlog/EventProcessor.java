@@ -1,6 +1,8 @@
 package com.qiankun.mysql.binlog;
 
+import cn.hutool.crypto.digest.MD5;
 import com.alibaba.druid.pool.DruidDataSourceFactory;
+import com.alibaba.fastjson2.JSON;
 import com.github.shyiko.mysql.binlog.BinaryLogClient;
 import com.github.shyiko.mysql.binlog.event.*;
 import com.github.shyiko.mysql.binlog.event.deserialization.EventDeserializer;
@@ -40,6 +42,8 @@ public class EventProcessor {
     private static final Logger LOGGER = LoggerFactory.getLogger(EventProcessor.class);
 
     private static final Pattern createTablePattern = Pattern.compile("^(CREATE|ALTER)\\s+TABLE", Pattern.CASE_INSENSITIVE);
+
+    private static final MD5 md5 = MD5.create();
 
     // 副本器
     private Replicator replicator;
@@ -314,8 +318,9 @@ public class EventProcessor {
             List<ColumnParser> parserList = table.getParserList();
             for (Column column : columnList) {
                 ColumnParser columnParser = parserList.get(column.inx);
-                dataImageRow.before.put(column.getColName(),columnParser.getValue(row[column.inx]));
+                dataImageRow.after.put(column.getColName(),columnParser.getValue(row[column.inx]));
             }
+            dataImageRow.afterDigest = md5.digestHex(JSON.toJSONString(dataImageRow.after));
             dataImageRow.changeTimestamp = event.getHeader().getTimestamp();
             // 默认第一个值就是id
             if(row.length > 0){
@@ -352,6 +357,7 @@ public class EventProcessor {
                 dataImageRow.before.put(column.getColName(),columnParser.getValue(row.getKey()[column.inx]));
                 dataImageRow.after.put(column.getColName(),columnParser.getValue(row.getValue()[column.inx]));
             }
+            dataImageRow.afterDigest = md5.digestHex(JSON.toJSONString(dataImageRow.after));
             dataImageRow.changeTimestamp = event.getHeader().getTimestamp();
             // 默认第一个值就是id
             if(row.getKey().length > 0){

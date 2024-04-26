@@ -12,10 +12,9 @@ import com.qiankun.mysql.utils.DateUtils;
 import org.bson.Document;
 import org.springframework.util.CollectionUtils;
 
-import java.util.Date;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 /**
  * @Description:
@@ -35,7 +34,9 @@ public class MongoProcessor extends AbstractProcessor {
     @Override
     public void doHandle(List<ModelLog> modelLogList) {
         if(!CollectionUtils.isEmpty(modelLogList)) {
-            List<Document> documentList = buildDocument(modelLogList);
+            // 过滤下重复的数据
+            Map<String, ModelLog> modelLogMap = modelLogList.stream().collect(Collectors.toMap(ModelLog::getAfterDigest, Function.identity(), (i1,i2) ->i2));
+            List<Document> documentList = buildDocument(modelLogMap.values());
             collection.insertMany(documentList);
         }
     }
@@ -59,7 +60,7 @@ public class MongoProcessor extends AbstractProcessor {
         return modelLogList;
     }
 
-    private List<Document> buildDocument(List<ModelLog> modelLogList) {
+    private List<Document> buildDocument(Collection<ModelLog> modelLogList) {
         List<Document> documentList = new LinkedList<>();
         for (ModelLog modelLog : modelLogList) {
             Document document = new Document();
@@ -71,6 +72,7 @@ public class MongoProcessor extends AbstractProcessor {
             document.put("before",modelLog.getBefore());
             document.put("after",modelLog.getAfter());
             document.put("date", DateUtils.dateStr(new Date(modelLog.getChangeTimestamp())));
+            document.put("afterDigest", modelLog.getAfterDigest());
             documentList.add(document);
         }
         return documentList;

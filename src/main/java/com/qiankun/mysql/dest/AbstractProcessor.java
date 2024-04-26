@@ -246,7 +246,8 @@ public abstract class AbstractProcessor implements EventHandler<DataImageRow> {
                 dataImageRow.getType(),
                 dataImageRow.getBefore(),
                 dataImageRow.getAfter(),
-                dataImageRow.getChangeTimestamp()
+                dataImageRow.getChangeTimestamp(),
+                dataImageRow.getAfterDigest()
         );
     }
 

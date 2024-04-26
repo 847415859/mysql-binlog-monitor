@@ -54,6 +54,9 @@ public class DataImageRow{
     Map<String,Object> after = Maps.newHashMap();
 
 
+    String afterDigest;
+
+
     /**
      * 数据变更时间戳
      */
@@ -82,6 +85,14 @@ public class DataImageRow{
             result.append(words[i].substring(0, 1).toUpperCase()).append(words[i].substring(1));
         }
         return result.toString();
+    }
+
+    public String getAfterDigest() {
+        return afterDigest;
+    }
+
+    public void setAfterDigest(String afterDigest) {
+        this.afterDigest = afterDigest;
     }
 
     public Object getId() {

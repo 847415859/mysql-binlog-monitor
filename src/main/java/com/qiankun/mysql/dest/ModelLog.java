@@ -53,6 +53,7 @@ public class ModelLog {
      */
     Map<String, Object> after = Maps.newHashMap();
 
+    String afterDigest;
 
     /**
      * 数据变更时间戳
@@ -62,7 +63,7 @@ public class ModelLog {
     public ModelLog() {
     }
 
-    public ModelLog(String database, String table, String modelId, String model, String type, Map<String, Object> before, Map<String, Object> after,long changeTimestamp) {
+    public ModelLog(String database, String table, String modelId, String model, String type, Map<String, Object> before, Map<String, Object> after,long changeTimestamp, String afterDigest) {
         this.database = database;
         this.table = table;
         this.modelId = modelId;
@@ -71,6 +72,15 @@ public class ModelLog {
         this.before = before;
         this.after = after;
         this.changeTimestamp = changeTimestamp;
+        this.afterDigest = afterDigest;
+    }
+
+    public String getAfterDigest() {
+        return afterDigest;
+    }
+
+    public void setAfterDigest(String afterDigest) {
+        this.afterDigest = afterDigest;
     }
 
     public RowEventType getRowEventType(){
@@ -113,6 +123,8 @@ public class ModelLog {
     public String getModel() {
         return model;
     }
+
+
 
     public void setModel(String model) {
         this.model = model;
